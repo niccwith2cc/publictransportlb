@@ -17,7 +17,7 @@ add_executable(sim ${SOURCES})
 target_include_directories(sim PRIVATE headers)
 
 option(BUILD_TESTS "Build and run unit tests" OFF)
-option(BUILD_MAP_TOOLS "Build OSM PBF converter" ON)
+option(BUILD_MAP_TOOLS "Build OSM PBF converter" OFF)
 
 if(BUILD_MAP_TOOLS)
     message(STATUS "Map tools are ENABLED - Fetching libosmium and protozero...")

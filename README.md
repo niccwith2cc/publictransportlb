@@ -4,14 +4,23 @@ C++ project about creating public transportation in Lebanon. This will cover the
 
 ## Building
 
-This project is built and managed using CMake.
+This project is built and managed using CMake. **Run all `cmake` commands from the project root** (`publictransportlb/`), not from inside `build/`.
 
 ### Normal workflow
 
+Builds only `sim` by default (`BUILD_TESTS` and `BUILD_MAP_TOOLS` are off).
+
 ```bash
-cmake -B build -DBUILD_TESTS=ON
+cmake -S . -B build
 cmake --build build
 ./build/sim
+```
+
+### Optional: unit tests
+
+```bash
+cmake -S . -B build -DBUILD_TESTS=ON
+cmake --build build
 ctest --test-dir build
 ```
 
@@ -20,7 +29,7 @@ ctest --test-dir build
 Raw `.osm.pbf` files are **not** tracked in git. Download them locally when you need to [Geofabrik Lebanon](https://download.geofabrik.de/asia/lebanon.html).
 
 ```bash
-cmake -B build -DBUILD_MAP_TOOLS=ON -DBUILD_TESTS=ON
+cmake -S . -B build -DBUILD_MAP_TOOLS=ON
 cmake --build build
 ./build/pbf_converter Beirut.osm.pbf data/beirut.mapbin
 ```
