@@ -11,6 +11,7 @@ set(SOURCES
     src/Transport.cpp
     src/Metro.cpp
     src/Map.cpp
+    src/Route.cpp
 )
 
 add_executable(sim ${SOURCES})
@@ -75,8 +76,10 @@ if(BUILD_TESTS)
     add_executable(unit_tests
         tests/test_transport.cpp
         tests/test_map.cpp
+        tests/test_route.cpp
         src/Transport.cpp
         src/Map.cpp
+        src/Route.cpp
     )
     target_include_directories(unit_tests PRIVATE headers)
     target_link_libraries(unit_tests PRIVATE Catch2::Catch2WithMain)
