@@ -13,18 +13,24 @@ static std::array<char, 3> to_char_array(std::string_view sv) {
 Route::Route(std::string_view busName)
     : _busName(to_char_array(busName)) {}
 
-Route::Route(std::string_view busName, const std::vector<std::array<char, 3>>& stopNames)
-    : _busName(to_char_array(busName)), _stopNames(stopNames) {}
+Route::Route(std::string_view busName, const std::vector<Stop>& stops)
+    : _busName(to_char_array(busName)), _stops(stops) {}
 
-void Route::addStop(std::string_view stopName) {
-    _stopNames.push_back(to_char_array(stopName));
+void Route::addStop(std::string_view stopName, float lat, float lon) {
+    _stops.push_back(Stop{to_char_array(stopName), lat, lon});
+}
+
+void Route::addStop(const Stop& stop) {
+    _stops.push_back(stop);
 }
 
 void Route::removeStop(std::string_view stopName) {
-    auto target = to_char_array(stopName);
-    _stopNames.erase(
-        std::remove(_stopNames.begin(), _stopNames.end(), target),
-        _stopNames.end()
+    auto targetName = to_char_array(stopName);
+    _stops.erase(
+        std::remove_if(_stops.begin(), _stops.end(), [&](const Stop& s) {
+            return s.name == targetName;
+        }),
+        _stops.end()
     );
 }
     
@@ -33,6 +39,6 @@ std::string_view Route::getBusName() const {
     return std::string_view(_busName.data(), len);
 }
 
-const std::vector<std::array<char, 3>>& Route::getStops() const{
-    return _stopNames;
+const std::vector<Stop>& Route::getStops() const {
+    return _stops;
 }
