@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beirut 8-Bit Transit Map & Coordinate Inspector</title>
+    <style>
+        :root {
+            --bg-color: #0d0f18;
+            --panel-bg: rgba(18, 22, 36, 0.94);
+            --panel-border: #3b4261;
+            --text-main: #c0caf5;
+            --text-accent: #7aa2f7;
+            --accent-green: #9ece6a;
+            --accent-yellow: #e0af68;
+            --accent-red: #f7768e;
+            --accent-cyan: #7dcfff;
+            --pico-black: #000000;
+            --pico-dark-blue: #1d2b53;
+            --pico-dark-purple: #7e2553;
+            --pico-dark-green: #008751;
+            --pico-brown: #ab5236;
+            --pico-dark-gray: #5f574f;
+            --pico-light-gray: #c2c3c7;
+            --pico-white: #fff1e8;
+            --pico-red: #ff004d;
+            --pico-orange: #ffa300;
+            --pico-yellow: #ffec27;
+            --pico-green: #00e436;
+            --pico-blue: #29adff;
+            --pico-indigo: #83769c;
+            --pico-pink: #ff77a8;
+            --pico-peach: #ffccaa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: 'Courier New', Courier, monospace;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+        }
+
+        #viewport-container {
+            flex: 1;
+            position: relative;
+            height: 100vh;
+            background-color: #10141f;
+            cursor: crosshair;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: -webkit-crisp-edges;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Scanline Overlay */
+        .scanlines {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                rgba(18, 16, 16, 0) 50%, 
+                rgba(0, 0, 0, 0.25) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* UI Panels */
+        .panel {
+            background: var(--panel-bg);
+            border: 2px solid var(--panel-border);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            border-radius: 4px;
+            color: var(--text-main);
+            font-size: 12px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Top Left Info HUD */
+        #hud-panel {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            padding: 12px 16px;
+            z-index: 20;
+            min-width: 290px;
+            pointer-events: none;
+        }
+
+        .hud-title {
+            font-size: 13px;
+            font-weight: bold;
+            color: var(--accent-yellow);
+            letter-spacing: 1px;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            border-bottom: 1px dashed var(--panel-border);
+            padding-bottom: 4px;
+        }
+
+        .hud-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+        }
+
+        .hud-label {
+            color: var(--text-accent);
+        }
+
+        .hud-val {
+            font-weight: bold;
+            color: #ffffff;
+        }
+
+        /* Control Toolbar */
+        #controls-bar {
+            position: absolute;
+            bottom: 16px;
+            left: 14px;
+            padding: 8px 12px;
+            z-index: 20;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 340px;
+            height: 100vh;
+            background: #141824;
+            border-left: 2px solid var(--panel-border);
+            display: flex;
+            flex-direction: column;
+            z-index: 20;
+            box-shadow: -4px 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .sidebar-header {
+            padding: 16px;
+            background: #1a2030;
+            border-bottom: 2px solid var(--panel-border);
+        }
+
+        .sidebar-header h2 {
+            font-size: 15px;
+            color: var(--accent-yellow);
+            letter-spacing: 1px;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-header p {
+            font-size: 11px;
+            color: var(--pico-light-gray);
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .section-box {
+            background: #10141f;
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 12px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: bold;
+            color: var(--text-accent);
+            text-transform: uppercase;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Buttons & Inputs */
+        button, .btn {
+            background: #24283b;
+            color: var(--text-main);
+            border: 1px solid var(--panel-border);
+            padding: 6px 12px;
+            font-family: inherit;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.15s ease;
+        }
+
+        button:hover, .btn:hover {
+            background: #3b4261;
+            color: #ffffff;
+            border-color: var(--text-accent);
+        }
+
+        button.active {
+            background: var(--accent-yellow);
+            color: #000000;
+            border-color: #ffffff;
+        }
+
+        .btn-primary {
+            background: #1f3a5f;
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+        }
+        .btn-primary:hover {
+            background: var(--accent-cyan);
+            color: #000;
+        }
+
+        .btn-danger {
+            background: #441b25;
+            border-color: var(--accent-red);
+            color: var(--accent-red);
+        }
+        .btn-danger:hover {
+            background: var(--accent-red);
+            color: #000;
+        }
+
+        input[type="text"] {
+            background: #0d0f18;
+            border: 1px solid var(--panel-border);
+            color: #ffffff;
+            padding: 6px 8px;
+            font-family: inherit;
+            font-size: 12px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-yellow);
+        }
+
+        /* Legend */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            font-size: 11px;
+        }
+
+        .legend-color {
+            width: 14px;
+            height: 8px;
+            border-radius: 1px;
+            border: 1px solid #000;
+        }
+
+        /* Stop List */
+        .stop-list {
+            list-style: none;
+            max-height: 180px;
+            overflow-y: auto;
+            margin-top: 8px;
+            border: 1px solid #1a2030;
+            border-radius: 3px;
+            background: #0d0f18;
+        }
+
+        .stop-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 8px;
+            border-bottom: 1px solid #1a2030;
+            font-size: 11px;
+        }
+
+        .stop-item:last-child {
+            border-bottom: none;
+        }
+
+        .stop-code {
+            font-weight: bold;
+            color: var(--accent-yellow);
+            background: #24283b;
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        .stop-coords {
+            color: var(--pico-light-gray);
+            font-size: 10px;
+        }
+
+        /* Code Export Area */
+        #code-export {
+            width: 100%;
+            height: 110px;
+            background: #080a10;
+            border: 1px solid var(--panel-border);
+            color: var(--accent-green);
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 10px;
+            padding: 8px;
+            resize: none;
+            white-space: pre;
+            border-radius: 3px;
+            margin-top: 6px;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #10141f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #24283b;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3b4261;
+        }
+
+        /* Loading / Drop banner */
+        #status-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(18, 22, 36, 0.95);
+            border: 2px solid var(--accent-yellow);
+            padding: 24px 32px;
+            text-align: center;
+            border-radius: 6px;
+            z-index: 50;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Main Viewport -->
+    <div id="viewport-container">
+        <canvas id="mapCanvas"></canvas>
+        <div id="scanlines" class="scanlines"></div>
+
+        <!-- Real-Time HUD -->
+        <div id="hud-panel" class="panel">
+            <div class="hud-title">Beirut 8-Bit Cartography</div>
+            <div class="hud-row">
+                <span class="hud-label">LAT:</span>
+                <span id="hud-lat" class="hud-val">33.89380</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">LON:</span>
+                <span id="hud-lon" class="hud-val">35.50180</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">ZOOM:</span>
+                <span id="hud-zoom" class="hud-val">2.5x</span>
+            </div>
+            <div class="hud-row">
+                <span class="hud-label">NEAREST NODE:</span>
+                <span id="hud-road" class="hud-val" style="color: var(--accent-cyan);">None</span>
+            </div>
+        </div>
+
+        <!-- Navigation Controls Toolbar -->
+        <div id="controls-bar" class="panel">
+            <button id="btn-zoom-in" title="Zoom In">+</button>
+            <button id="btn-zoom-out" title="Zoom Out">-</button>
+            <button id="btn-reset-view" title="Center on Downtown Beirut">Center Beirut</button>
+            <button id="btn-toggle-grid" title="Toggle Pixel Grid">Grid: OFF</button>
+            <button id="btn-toggle-scanlines" title="Toggle Retro CRT Scanlines">CRT: ON</button>
+            <button id="btn-snap-node" class="active" title="Snap Stop to Nearest OSM Road Node">Snap: ON</button>
+        </div>
+
+        <!-- Status / Drop Overlay -->
+        <div id="status-overlay">
+            <h3 id="status-text" style="color: var(--accent-yellow); margin-bottom: 8px;">Loading Beirut Map...</h3>
+            <p id="status-subtext" style="font-size: 11px; color: var(--text-main);">Parsing <code>data/beirut.mapbin</code>...</p>
+        </div>
+    </div>
+
+    <!-- Sidebar Controls -->
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h2>PTLB - BEIRUT MAP</h2>
+            <p>8-Bit Coordinate & Transit Design</p>
+        </div>
+
+        <div class="sidebar-content">
+            <!-- Map Stats -->
+            <div class="section-box">
+                <div class="section-title">Map Statistics</div>
+                <div class="hud-row">
+                    <span class="hud-label">Nodes:</span>
+                    <span id="stat-nodes" class="hud-val">0</span>
+                </div>
+                <div class="hud-row">
+                    <span class="hud-label">Ways:</span>
+                    <span id="stat-ways" class="hud-val">0</span>
+                </div>
+                <div class="hud-row">
+                    <span class="hud-label">Format:</span>
+                    <span class="hud-val" style="color: var(--accent-green);">PTLB v1</span>
+                </div>
+            </div>
+
+            <!-- Stop Designation Tool -->
+            <div class="section-box">
+                <div class="section-title">
+                    <span>Stop Placement</span>
+                    <span id="stop-count-badge" style="font-size: 10px; color: var(--accent-yellow);">(0 stops)</span>
+                </div>
+                <p style="font-size: 11px; color: var(--pico-light-gray); margin-bottom: 8px;">
+                    Click anywhere on the map to place a stop.
+                </p>
+                <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                    <input type="text" id="input-stop-name" maxlength="3" placeholder="ID" value="HAM" style="width: 80px; text-align: center;">
+                    <button id="btn-clear-stops" class="btn-danger" style="flex: 1;">Clear All</button>
+                </div>
+                
+                <ul id="stop-list" class="stop-list">
+                    <li style="padding: 10px; text-align: center; color: var(--pico-dark-gray);">No stops placed yet.</li>
+                </ul>
+            </div>
+
+            <!-- C++ Export -->
+            <div class="section-box">
+                <div class="section-title">
+                    <span>C++ Route Code</span>
+                    <button id="btn-copy-code" class="btn-primary" style="padding: 2px 8px; font-size: 10px;">Copy</button>
+                </div>
+                <textarea id="code-export" readonly>// Click on map to generate route code...</textarea>
+            </div>
+
+            <!-- 8-Bit Color Hierarchy -->
+            <div class="section-box">
+                <div class="section-title">8-Bit Layer Palette</div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-red);"></span>
+                    <span>Motorway (Red)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-orange);"></span>
+                    <span>Primary Roads (Orange)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-yellow);"></span>
+                    <span>Secondary Roads (Yellow)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-dark-gray);"></span>
+                    <span>Residential (Slate)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-green);"></span>
+                    <span>Tramway (Emerald)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-blue);"></span>
+                    <span>Metro (Cyan)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-color" style="background: var(--pico-pink);"></span>
+                    <span>Light Rail (Magenta)</span>
+                </div>
+            </div>
+
+            <!-- Pixel Resolution Scale -->
+            <div class="section-box">
+                <div class="section-title">Pixel Chunkiness</div>
+                <div style="display: flex; gap: 4px;">
+                    <button class="btn-scale" data-scale="1" style="flex: 1;">1x Crisp</button>
+                    <button class="btn-scale active" data-scale="2" style="flex: 1;">2x Retro</button>
+                    <button class="btn-scale" data-scale="3" style="flex: 1;">3x Chunky</button>
+                </div>
+            </div>
+
+            <!-- Custom File Drop -->
+            <div class="section-box" style="text-align: center;">
+                <input type="file" id="file-input" accept=".mapbin" style="display: none;">
+                <button id="btn-load-custom" style="width: 100%;">Load Custom .mapbin</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // 8-Bit Palette & Road Hierarchy Definitions
+        // ==========================================
+        const ROAD_STYLES = {
+            0: { name: 'Other',       color: '#3b4261', width: 1 },
+            1: { name: 'Motorway',    color: '#ff004d', width: 3 }, // Pico Red
+            2: { name: 'Primary',     color: '#ffa300', width: 2 }, // Pico Orange
+            3: { name: 'Secondary',   color: '#ffec27', width: 2 }, // Pico Yellow
+            4: { name: 'Residential', color: '#5f574f', width: 1 }, // Pico Dark Gray
+            5: { name: 'Tram',        color: '#00e436', width: 3 }, // Pico Green
+            6: { name: 'Metro',       color: '#29adff', width: 4 }, // Pico Blue
+            7: { name: 'LightRail',   color: '#ff77a8', width: 3 }  // Pico Pink
+        };
+
+        // State
+        const state = {
+            nodes: null, // { count, lats: Float32Array, lons: Float32Array }
+            ways: [],    // [{ roadClass, nodeIndices: Uint32Array }]
+            bounds: { minLat: 33.73, maxLat: 33.94, minLon: 35.46, maxLon: 35.66 },
+            
+            // Viewport Transform (Centered on Central Beirut)
+            camera: {
+                x: 35.5018, // Center Lon (Beirut Downtown / Martyrs Sq)
+                y: 33.8938, // Center Lat
+                zoom: 3.5,
+                minZoom: 0.2,
+                maxZoom: 100.0
+            },
+            
+            // Pixel Art Resolution
+            pixelScale: 2,
+            showGrid: false,
+            snapToNode: true,
+            
+            // Initial Stops from sim.cpp
+            stops: [
+                { name: 'MIK', lat: 33.8993, lon: 35.4851 },
+                { name: 'BIE', lat: 33.9015, lon: 35.5182 },
+                { name: 'RAS', lat: 33.8967, lon: 35.4741 },
+                { name: 'AUB', lat: 33.8996, lon: 35.4815 },
+                { name: 'BAY', lat: 33.8942, lon: 35.4984 }
+            ],
+
+            // Interaction
+            isDragging: false,
+            dragStart: { x: 0, y: 0 },
+            nearestNodeIndex: -1
+        };
+
+        // DOM Elements
+        const canvas = document.getElementById('mapCanvas');
+        const ctx = canvas.getContext('2d', { alpha: false });
+        const viewport = document.getElementById('viewport-container');
+        const hudLat = document.getElementById('hud-lat');
+        const hudLon = document.getElementById('hud-lon');
+        const hudZoom = document.getElementById('hud-zoom');
+        const hudRoad = document.getElementById('hud-road');
+        const statusOverlay = document.getElementById('status-overlay');
+        const statusText = document.getElementById('status-text');
+        const statusSubtext = document.getElementById('status-subtext');
+        const stopListEl = document.getElementById('stop-list');
+        const stopCountBadge = document.getElementById('stop-count-badge');
+        const codeExport = document.getElementById('code-export');
+
+        // ==========================================
+        // PTLB Binary Parser (Memory Efficient)
+        // ==========================================
+        function parseMapBin(buffer) {
+            const view = new DataView(buffer);
+            let offset = 0;
+
+            // Magic 'PTLB'
+            const magic = String.fromCharCode(
+                view.getUint8(offset++),
+                view.getUint8(offset++),
+                view.getUint8(offset++),
+                view.getUint8(offset++)
+            );
+
+            if (magic !== 'PTLB') {
+                throw new Error('Invalid file magic: Expected PTLB, got ' + magic);
+            }
+
+            const version = view.getUint16(offset, true);
+            offset += 2;
+            if (version !== 1) {
+                throw new Error('Unsupported PTLB version: ' + version);
+            }
+
+            const nodeCount = view.getUint32(offset, true);
+            offset += 4;
+            const wayCount = view.getUint32(offset, true);
+            offset += 4;
+
+            console.log(`Parsing PTLB v${version}: ${nodeCount} nodes, ${wayCount} ways`);
+
+            const lats = new Float32Array(nodeCount);
+            const lons = new Float32Array(nodeCount);
+
+            let minLat = 90.0, maxLat = -90.0, minLon = 180.0, maxLon = -180.0;
+
+            for (let i = 0; i < nodeCount; i++) {
+                offset += 8; // skip osm_id (8 bytes)
+                let lat = view.getFloat32(offset, true);
+                offset += 4;
+                let lon = view.getFloat32(offset, true);
+                offset += 4;
+
+                // Failsafe auto-normalization for fixed-point 1e7 coordinates
+                if (Math.abs(lat) > 90.0) lat /= 1e7;
+                if (Math.abs(lon) > 180.0) lon /= 1e7;
+
+                lats[i] = lat;
+                lons[i] = lon;
+
+                if (lat < minLat) minLat = lat;
+                if (lat > maxLat) maxLat = lat;
+                if (lon < minLon) minLon = lon;
+                if (lon > maxLon) maxLon = lon;
+            }
+
+            const ways = [];
+            for (let i = 0; i < wayCount; i++) {
+                offset += 8; // skip osm_id (8 bytes)
+                const roadClass = view.getUint8(offset++);
+                const nodeRefCount = view.getUint16(offset, true);
+                offset += 2;
+
+                const nodeIndices = new Uint32Array(nodeRefCount);
+                for (let j = 0; j < nodeRefCount; j++) {
+                    nodeIndices[j] = view.getUint32(offset, true);
+                    offset += 4;
+                }
+
+                ways.push({
+                    roadClass: roadClass,
+                    nodeIndices: nodeIndices
+                });
+            }
+
+            return {
+                nodes: { count: nodeCount, lats, lons },
+                ways: ways,
+                bounds: { minLat, maxLat, minLon, maxLon }
+            };
+        }
+
+        // ==========================================
+        // Projection & Coordinate Math
+        // ==========================================
+        const BEIRUT_LAT_RAD = 33.89 * (Math.PI / 180);
+        const COS_BEIRUT_LAT = Math.cos(BEIRUT_LAT_RAD);
+
+        function geoToScreen(lat, lon, width, height) {
+            // Standard city scale: degrees to pixel space
+            const baseScale = Math.min(width, height) * 4.5;
+            const scale = baseScale * state.camera.zoom;
+
+            const cx = width / 2;
+            const cy = height / 2;
+
+            const dx = (lon - state.camera.x) * COS_BEIRUT_LAT;
+            const dy = (lat - state.camera.y);
+
+            const screenX = cx + dx * scale;
+            const screenY = cy - dy * scale; // Invert Y for screen
+
+            return { x: screenX, y: screenY };
+        }
+
+        function screenToGeo(screenX, screenY, width, height) {
+            const baseScale = Math.min(width, height) * 4.5;
+            const scale = baseScale * state.camera.zoom;
+
+            const cx = width / 2;
+            const cy = height / 2;
+
+            const dx = (screenX - cx) / scale;
+            const dy = (cy - screenY) / scale;
+
+            const lon = state.camera.x + (dx / COS_BEIRUT_LAT);
+            const lat = state.camera.y + dy;
+
+            return { lat, lon };
+        }
+
+        function findNearestNode(lat, lon) {
+            if (!state.nodes) return -1;
+            const lats = state.nodes.lats;
+            const lons = state.nodes.lons;
+            let bestDistSq = Infinity;
+            let bestIndex = -1;
+            const delta = 0.006; // ~600m search window for fast filtering
+
+            for (let i = 0; i < state.nodes.count; i++) {
+                const dLat = lats[i] - lat;
+                if (Math.abs(dLat) > delta) continue;
+                const dLon = lons[i] - lon;
+                if (Math.abs(dLon) > delta) continue;
+
+                const distSq = dLat * dLat + dLon * dLon;
+                if (distSq < bestDistSq) {
+                    bestDistSq = distSq;
+                    bestIndex = i;
+                }
+            }
+            return bestIndex;
+        }
+
+        // ==========================================
+        // Retro Pixel Renderer
+        // ==========================================
+        function resizeCanvas() {
+            const w = viewport.clientWidth;
+            const h = viewport.clientHeight;
+            
+            const targetW = Math.max(100, Math.floor(w / state.pixelScale));
+            const targetH = Math.max(100, Math.floor(h / state.pixelScale));
+
+            if (canvas.width !== targetW || canvas.height !== targetH) {
+                canvas.width = targetW;
+                canvas.height = targetH;
+            }
+        }
+
+        function render() {
+            resizeCanvas();
+
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // Clear Background with Retro Dark Slate
+            ctx.fillStyle = '#0f121d';
+            ctx.fillRect(0, 0, width, height);
+
+            if (!state.nodes || !state.ways) {
+                requestAnimationFrame(render);
+                return;
+            }
+
+            const lats = state.nodes.lats;
+            const lons = state.nodes.lons;
+
+            // Screen bounds with margin for culling
+            const margin = 50;
+
+            // Draw Roads grouped by RoadClass (Layered)
+            ctx.lineCap = 'square';
+            ctx.lineJoin = 'miter';
+
+            const drawOrder = [0, 4, 3, 2, 1, 5, 6, 7];
+
+            for (const rClass of drawOrder) {
+                const style = ROAD_STYLES[rClass] || ROAD_STYLES[0];
+                ctx.strokeStyle = style.color;
+                ctx.lineWidth = style.width;
+
+                ctx.beginPath();
+                for (let w = 0; w < state.ways.length; w++) {
+                    const way = state.ways[w];
+                    if (way.roadClass !== rClass) continue;
+
+                    const idxs = way.nodeIndices;
+                    if (idxs.length < 2) continue;
+
+                    const p0 = geoToScreen(lats[idxs[0]], lons[idxs[0]], width, height);
+                    ctx.moveTo(Math.round(p0.x), Math.round(p0.y));
+
+                    for (let j = 1; j < idxs.length; j++) {
+                        const idx = idxs[j];
+                        const pj = geoToScreen(lats[idx], lons[idx], width, height);
+                        ctx.lineTo(Math.round(pj.x), Math.round(pj.y));
+                    }
+                }
+                ctx.stroke();
+            }
+
+            // Draw Pixel Grid if enabled
+            if (state.showGrid) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                const gridSize = 16;
+                for (let x = 0; x < width; x += gridSize) {
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, height);
+                }
+                for (let y = 0; y < height; y += gridSize) {
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                }
+                ctx.stroke();
+            }
+
+            // Draw Nearest Hovered Node
+            if (state.nearestNodeIndex >= 0) {
+                const nLat = lats[state.nearestNodeIndex];
+                const nLon = lons[state.nearestNodeIndex];
+                const p = geoToScreen(nLat, nLon, width, height);
+
+                ctx.fillStyle = '#7dcfff';
+                ctx.fillRect(Math.round(p.x) - 2, Math.round(p.y) - 2, 5, 5);
+            }
+
+            // Draw User Placed Stops
+            for (let i = 0; i < state.stops.length; i++) {
+                const stop = state.stops[i];
+                const p = geoToScreen(stop.lat, stop.lon, width, height);
+                const px = Math.round(p.x);
+                const py = Math.round(p.y);
+
+                // Stop 8-bit Diamond / Square Badge
+                ctx.fillStyle = '#ff004d';
+                ctx.fillRect(px - 4, py - 4, 9, 9);
+                ctx.fillStyle = '#ffec27';
+                ctx.fillRect(px - 2, py - 2, 5, 5);
+
+                // Label
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '9px monospace';
+                ctx.fillText(stop.name, px + 6, py + 3);
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        // ==========================================
+        // UI & Stops Management
+        // ==========================================
+        function updateStopsUI() {
+            stopCountBadge.textContent = `(${state.stops.length} stops)`;
+            stopListEl.innerHTML = '';
+
+            if (state.stops.length === 0) {
+                stopListEl.innerHTML = '<li style="padding: 10px; text-align: center; color: var(--pico-dark-gray);">No stops placed yet.</li>';
+            } else {
+                state.stops.forEach((stop, idx) => {
+                    const li = document.createElement('li');
+                    li.className = 'stop-item';
+                    li.innerHTML = `
+                        <span class="stop-code">${stop.name}</span>
+                        <span class="stop-coords">${stop.lat.toFixed(4)}, ${stop.lon.toFixed(4)}</span>
+                        <button class="btn-danger" style="padding: 2px 6px; font-size: 10px;" data-del="${idx}">X</button>
+                    `;
+                    stopListEl.appendChild(li);
+                });
+            }
+
+            // Generate C++ Code
+            let cppCode = `Route route("B1");\n`;
+            state.stops.forEach(s => {
+                cppCode += `route.addStop("${s.name}", ${s.lat.toFixed(4)}f, ${s.lon.toFixed(4)}f);\n`;
+            });
+            codeExport.value = cppCode;
+        }
+
+        stopListEl.addEventListener('click', (e) => {
+            const delIdx = e.target.getAttribute('data-del');
+            if (delIdx !== null) {
+                state.stops.splice(parseInt(delIdx), 1);
+                updateStopsUI();
+            }
+        });
+
+        document.getElementById('btn-clear-stops').addEventListener('click', () => {
+            state.stops = [];
+            updateStopsUI();
+        });
+
+        document.getElementById('btn-copy-code').addEventListener('click', () => {
+            navigator.clipboard.writeText(codeExport.value);
+            const btn = document.getElementById('btn-copy-code');
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+        });
+
+        // ==========================================
+        // Interactive Mouse & Canvas Handlers
+        // ==========================================
+        function getCanvasCoords(e) {
+            const rect = canvas.getBoundingClientRect();
+            const rawX = e.clientX - rect.left;
+            const rawY = e.clientY - rect.top;
+            return {
+                x: (rawX / rect.width) * canvas.width,
+                y: (rawY / rect.height) * canvas.height
+            };
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+                state.isDragging = true;
+                state.dragStart = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        window.addEventListener('mouseup', () => {
+            state.isDragging = false;
+        });
+
+        canvas.addEventListener('click', (e) => {
+            const dist = Math.hypot(e.clientX - state.dragStart.x, e.clientY - state.dragStart.y);
+            if (dist > 5) return; // Ignore drag release
+
+            const p = getCanvasCoords(e);
+            const geo = screenToGeo(p.x, p.y, canvas.width, canvas.height);
+
+            let placeLat = geo.lat;
+            let placeLon = geo.lon;
+
+            if (state.snapToNode && state.nearestNodeIndex >= 0) {
+                placeLat = state.nodes.lats[state.nearestNodeIndex];
+                placeLon = state.nodes.lons[state.nearestNodeIndex];
+            }
+
+            const inputName = document.getElementById('input-stop-name').value.trim() || 'STP';
+            const name3 = (inputName + '   ').substring(0, 3).toUpperCase();
+
+            state.stops.push({
+                name: name3,
+                lat: parseFloat(placeLat.toFixed(5)),
+                lon: parseFloat(placeLon.toFixed(5))
+            });
+
+            const lastChar = inputName.slice(-1);
+            if (!isNaN(parseInt(lastChar))) {
+                const nextNum = parseInt(lastChar) + 1;
+                document.getElementById('input-stop-name').value = inputName.slice(0, -1) + nextNum;
+            }
+
+            updateStopsUI();
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const p = getCanvasCoords(e);
+            const geo = screenToGeo(p.x, p.y, canvas.width, canvas.height);
+
+            hudLat.textContent = geo.lat.toFixed(5);
+            hudLon.textContent = geo.lon.toFixed(5);
+
+            if (state.isDragging) {
+                const dx = e.clientX - state.dragStart.x;
+                const dy = e.clientY - state.dragStart.y;
+
+                const baseScale = Math.min(canvas.width, canvas.height) * 4.5;
+                const scale = baseScale * state.camera.zoom;
+
+                // Convert screen delta to geo delta
+                state.camera.x -= (dx / state.pixelScale) / (scale * COS_BEIRUT_LAT);
+                state.camera.y += (dy / state.pixelScale) / scale;
+
+                state.dragStart = { x: e.clientX, y: e.clientY };
+            } else {
+                state.nearestNodeIndex = findNearestNode(geo.lat, geo.lon);
+                if (state.nearestNodeIndex >= 0) {
+                    hudRoad.textContent = `#${state.nearestNodeIndex}`;
+                } else {
+                    hudRoad.textContent = `None`;
+                }
+            }
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomFactor = e.deltaY < 0 ? 1.25 : 0.8;
+            state.camera.zoom = Math.max(state.camera.minZoom, Math.min(state.camera.maxZoom, state.camera.zoom * zoomFactor));
+            hudZoom.textContent = state.camera.zoom.toFixed(1) + 'x';
+        });
+
+        // Controls
+        document.getElementById('btn-zoom-in').addEventListener('click', () => {
+            state.camera.zoom = Math.min(state.camera.maxZoom, state.camera.zoom * 1.35);
+            hudZoom.textContent = state.camera.zoom.toFixed(1) + 'x';
+        });
+
+        document.getElementById('btn-zoom-out').addEventListener('click', () => {
+            state.camera.zoom = Math.max(state.camera.minZoom, state.camera.zoom * 0.74);
+            hudZoom.textContent = state.camera.zoom.toFixed(1) + 'x';
+        });
+
+        document.getElementById('btn-reset-view').addEventListener('click', () => {
+            state.camera.x = 35.5018;
+            state.camera.y = 33.8938;
+            state.camera.zoom = 3.5;
+            hudZoom.textContent = '3.5x';
+        });
+
+        document.getElementById('btn-toggle-grid').addEventListener('click', (e) => {
+            state.showGrid = !state.showGrid;
+            e.target.textContent = `Grid: ${state.showGrid ? 'ON' : 'OFF'}`;
+            e.target.classList.toggle('active', state.showGrid);
+        });
+
+        document.getElementById('btn-toggle-scanlines').addEventListener('click', (e) => {
+            const scanlines = document.getElementById('scanlines');
+            const isActive = scanlines.style.display !== 'none';
+            scanlines.style.display = isActive ? 'none' : 'block';
+            e.target.textContent = `CRT: ${isActive ? 'OFF' : 'ON'}`;
+            e.target.classList.toggle('active', !isActive);
+        });
+
+        document.getElementById('btn-snap-node').addEventListener('click', (e) => {
+            state.snapToNode = !state.snapToNode;
+            e.target.textContent = `Snap: ${state.snapToNode ? 'ON' : 'OFF'}`;
+            e.target.classList.toggle('active', state.snapToNode);
+        });
+
+        // Pixel Scale Buttons
+        document.querySelectorAll('.btn-scale').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.btn-scale').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.pixelScale = parseInt(btn.getAttribute('data-scale'));
+            });
+        });
+
+        // ==========================================
+        // MapBin File Loading
+        // ==========================================
+        function loadMapData(arrayBuffer) {
+            try {
+                statusText.textContent = 'Parsing PTLB Binary...';
+                const parsed = parseMapBin(arrayBuffer);
+
+                state.nodes = parsed.nodes;
+                state.ways = parsed.ways;
+                state.bounds = parsed.bounds;
+
+                // Center on Beirut Downtown
+                state.camera.x = 35.5018;
+                state.camera.y = 33.8938;
+                state.camera.zoom = 3.5;
+                hudZoom.textContent = '3.5x';
+
+                document.getElementById('stat-nodes').textContent = state.nodes.count.toLocaleString();
+                document.getElementById('stat-ways').textContent = state.ways.length.toLocaleString();
+
+                statusOverlay.style.opacity = '0';
+                setTimeout(() => { statusOverlay.style.display = 'none'; }, 300);
+
+                updateStopsUI();
+            } catch (err) {
+                console.error(err);
+                statusText.textContent = 'Error Loading Map';
+                statusSubtext.textContent = err.message;
+            }
+        }
+
+        // Auto load data/beirut.mapbin
+        async function fetchDefaultMap() {
+            const candidates = ['/data/beirut.mapbin', '../data/beirut.mapbin', 'data/beirut.mapbin'];
+            for (const url of candidates) {
+                try {
+                    const res = await fetch(url);
+                    if (res.ok) {
+                        const buf = await res.arrayBuffer();
+                        loadMapData(buf);
+                        return;
+                    }
+                } catch (e) {}
+            }
+            statusText.textContent = 'Ready for MapBin';
+            statusSubtext.textContent = 'Click "Load Custom .mapbin" or drag & drop data/beirut.mapbin here.';
+        }
+
+        // Custom File Upload & Drag-and-drop
+        const fileInput = document.getElementById('file-input');
+        document.getElementById('btn-load-custom').addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = () => loadMapData(reader.result);
+                reader.readAsArrayBuffer(e.target.files[0]);
+            }
+        });
+
+        window.addEventListener('dragover', (e) => e.preventDefault());
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (e.dataTransfer.files.length > 0) {
+                const reader = new FileReader();
+                reader.onload = () => loadMapData(reader.result);
+                reader.readAsArrayBuffer(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Init
+        fetchDefaultMap();
+        requestAnimationFrame(render);
+    </script>
+</body>
+</html>
