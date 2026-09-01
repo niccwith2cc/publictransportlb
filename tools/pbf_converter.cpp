@@ -140,9 +140,10 @@ ConversionResult build_map(const std::string& input_path)
             if (inserted) {
                 MapNode node;
                 node.osm_id = static_cast<std::uint64_t>(node_ref);
-                node.lat = static_cast<float>(location.y());
-                node.lon = static_cast<float>(location.x());
+                node.lat = static_cast<float>(location.lat());
+                node.lon = static_cast<float>(location.lon());
                 nodes.push_back(node);
+
             }
 
             map_way.node_indices.push_back(it->second);
